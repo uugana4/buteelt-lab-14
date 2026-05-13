@@ -1,0 +1,414 @@
+{
+  "info": {
+    "_postman_id": "4c50e8a7-3b42-4ed4-9cc9-7f7ab8147f01",
+    "name": "Lab14 - DummyJSON API Testing",
+    "description": "F.CSM311 Lab14 collection: integration and API testing with chaining, assertions, pre-request scripts, and negative cases.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.environment.set(\"randomTitle\", \"lab14-post-\" + Date.now());",
+          "pm.environment.set(\"ts\", new Date().toISOString());"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Authentication and token-based chain requests.",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Login and store token + userId for chained requests.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"expiresInMins\": 30\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Login status is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Login response time is below 5000ms\", function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(5000);",
+                  "});",
+                  "",
+                  "pm.test(\"Login returns token and user id\", function () {",
+                  "  const d = pm.response.json();",
+                  "  const authToken = d.accessToken || d.token;",
+                  "  pm.expect(authToken).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(d).to.have.property(\"id\");",
+                  "  pm.expect(d.id).to.be.a(\"number\");",
+                  "  pm.environment.set(\"token\", authToken);",
+                  "  pm.environment.set(\"userId\", d.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Use Bearer token from Login request and fetch authenticated profile.",
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Profile status is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Profile id matches chained userId\", function () {",
+                  "  const d = pm.response.json();",
+                  "  pm.expect(d).to.have.property(\"id\");",
+                  "  pm.expect(d.id).to.eql(Number(pm.environment.get(\"userId\")));",
+                  "});",
+                  "",
+                  "pm.test(\"Content-Type includes application/json\", function () {",
+                  "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "description": "Read users and verify both happy and error paths.",
+      "item": [
+        {
+          "name": "List Users (Happy GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Fetch users list and validate array structure and latency.",
+            "url": {
+              "raw": "{{baseUrl}}/users?limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Users list status is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Users list response time is below 3000ms\", function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});",
+                  "",
+                  "pm.test(\"Users response has users array\", function () {",
+                  "  const d = pm.response.json();",
+                  "  pm.expect(d).to.have.property(\"users\");",
+                  "  pm.expect(d.users).to.be.an(\"array\");",
+                  "  pm.expect(d.users.length).to.be.greaterThan(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Fetch single user by id and validate core fields.",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Get user status is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"User schema has id and email\", function () {",
+                  "  const d = pm.response.json();",
+                  "  pm.expect(d.id).to.be.a(\"number\");",
+                  "  pm.expect(d).to.have.property(\"email\");",
+                  "  pm.expect(d.email).to.be.a(\"string\").and.match(/@/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Missing User (Error 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Negative test: request non-existing user and expect 404 contract.",
+            "url": {
+              "raw": "{{baseUrl}}/users/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "999999"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Missing user returns 404\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test(\"Error message contains not found\", function () {",
+                  "  const d = pm.response.json();",
+                  "  pm.expect(d).to.have.property(\"message\");",
+                  "  pm.expect(String(d.message).toLowerCase()).to.include(\"not found\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Posts",
+      "description": "Create, update, and delete resources (write operations).",
+      "item": [
+        {
+          "name": "Create Post (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Create a post and store createdPostId for subsequent update/delete requests.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{randomTitle}}\",\n  \"body\": \"Created from Postman at {{ts}}\",\n  \"userId\": {{userId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/posts/add",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "add"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Create post status is 200 or 201\", function () {",
+                  "  pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "",
+                  "pm.test(\"Create post returns numeric id\", function () {",
+                  "  const d = pm.response.json();",
+                  "  pm.expect(d).to.have.property(\"id\");",
+                  "  pm.expect(d.id).to.be.a(\"number\");",
+                  "  pm.environment.set(\"createdPostId\", d.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Post (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Update an existing post title and verify business rule.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{randomTitle}}-updated\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/posts/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "1"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Update post status is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Updated title follows expected pattern\", function () {",
+                  "  const d = pm.response.json();",
+                  "  pm.expect(d).to.have.property(\"title\");",
+                  "  pm.expect(d.title).to.include(\"-updated\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Post (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "description": "Delete an existing post and validate delete contract.",
+            "url": {
+              "raw": "{{baseUrl}}/posts/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts",
+                "1"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Delete post status is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Delete response indicates isDeleted true\", function () {",
+                  "  const d = pm.response.json();",
+                  "  pm.expect(d).to.have.property(\"isDeleted\");",
+                  "  pm.expect(d.isDeleted).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://dummyjson.com"
+    }
+  ]
+}

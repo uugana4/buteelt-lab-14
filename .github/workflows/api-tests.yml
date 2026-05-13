@@ -1,0 +1,49 @@
+name: API tests
+
+on: [push, pull_request]
+
+jobs:
+  newman:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Newman
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Prepare CI environment values
+        run: |
+          node -e "
+          const fs = require('fs');
+          const p = 'postman/env.ci.json';
+          const env = JSON.parse(fs.readFileSync(p, 'utf8'));
+          const vars = Object.fromEntries(env.values.map(v => [v.key, v]));
+          vars.username.value = process.env.CI_USERNAME || vars.username.value;
+          vars.password.value = process.env.CI_PASSWORD || vars.password.value;
+          fs.mkdirSync('reports', { recursive: true });
+          fs.writeFileSync(p, JSON.stringify(env, null, 2));
+          "
+        env:
+          CI_USERNAME: ${{ secrets.CI_USERNAME }}
+          CI_PASSWORD: ${{ secrets.CI_PASSWORD }}
+
+      - name: Run API tests
+        run: |
+          newman run postman/collection.json \
+          -e postman/env.ci.json \
+          --reporters cli,junit,htmlextra \
+          --reporter-junit-export reports/api.xml \
+          --reporter-htmlextra-export reports/api.html
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-test-report
+          path: reports/
